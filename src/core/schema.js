@@ -8,7 +8,7 @@ var SHEETS = {
     headers: ['発注ID','ブランド','仕入先コード','発注日','稟議AP','通貨','換算レート','支払条件'],
     required: [], protected: ['発注ID'] },
   shipments: { name: '便', key: '便ID',
-    headers: ['便ID','取込元','発地','shipper','INV NO','H B/L','M B/L','VESSEL','ETD','ETA','NX管理番号','輸入許可日','倉庫連絡日','書類フォルダURL','取込日時'],
+    headers: ['便ID','NX便キー','取込元','発地','shipper','INV NO','H B/L','M B/L','VESSEL','ETD','ETA','NX管理番号','輸入許可日','倉庫連絡日','書類フォルダURL','取込日時'],
     required: ['H B/L'], protected: ['便ID','取込日時'] },
   shipLines: { name: '出荷明細', key: '出荷明細ID',
     headers: ['出荷明細ID','便ID','コンテナNO','コンテナタイプ','品目テキスト','数量','配達予定日','配達先コード','明細ID','紐付状態','候補','要確認'],
