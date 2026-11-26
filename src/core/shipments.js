@@ -35,6 +35,7 @@ function same_(a, b) {
   if (a instanceof Date || b instanceof Date) return new Date(a).getTime() === new Date(b).getTime();
   return String(a) === String(b);
 }
+function blank_(v) { return v === null || v === undefined || v === ''; }
 function diff_(oldRow, newVals) {
   var ch = {};
   Object.keys(newVals).forEach(function (k) { if (!same_(oldRow[k], newVals[k])) ch[k] = newVals[k]; });
@@ -54,6 +55,7 @@ function upsertShipments(existing, parsed, now) {
     var old = byKey[p.key];
     if (old) {
       var ch = diff_(old, vals);
+      Object.keys(ch).forEach(function (k) { if (blank_(ch[k]) && !blank_(old[k])) delete ch[k]; });
       if (Object.keys(ch).length) updates.push({ idField: '便ID', id: old.便ID, changes: ch });
       return;
     }
@@ -66,39 +68,63 @@ function upsertShipments(existing, parsed, now) {
   return { inserts: inserts, updates: updates };
 }
 
-/** 品目1つ＝出荷明細1行。確定済みの紐付は上書きしない。 */
+/** 品目1つ＝出荷明細1行。キーは 便ID|コンテナ|品名|出現順（数量は含めない）。確定済みの紐付は上書きしない。 */
+function itemNameOf_(text) {
+  var t = String(text || '');
+  if (t.indexOf('（読めない）') === 0 || t.indexOf('：') < 0) return t;
+  return t.slice(0, t.lastIndexOf('：'));
+}
 function upsertShipLines(existing, parsed, shipIdByKey) {
-  var byKey = {}, branch = {};
-  var keyOf = function (shipId, cont, text, n) { return [shipId, cont, text, n].join('|'); };
-  var seenEx = {};
+  var byKey = {}, branch = {}, cnt = {};
+  var keyOf = function (shipId, cont, name, n) { return [shipId, cont, name, n].join('|'); };
   existing.forEach(function (r) {
-    var k0 = [r.便ID, r.コンテナNO, r.品目テキスト].join('|');
-    seenEx[k0] = (seenEx[k0] || 0) + 1;
-    byKey[keyOf(r.便ID, r.コンテナNO, r.品目テキスト, seenEx[k0])] = r;
+    var k0 = [r.便ID, r.コンテナNO, itemNameOf_(r.品目テキスト)].join('|');
+    cnt[k0] = (cnt[k0] || 0) + 1;
+    byKey[k0 + '|' + cnt[k0]] = r;
     var b = parseInt(String(r.出荷明細ID).slice(-2), 10);
     branch[r.便ID] = Math.max(branch[r.便ID] || 0, b || 0);
   });
-  var inserts = [], updates = [], seen = {};
+  var inserts = [], updates = [], seen = {}, matched = {}, touchedShips = {};
   parsed.forEach(function (p) {
     var shipId = shipIdByKey.get(p.key);
     if (!shipId) return;
-    var entries = p.items.length ? p.items.map(function (it) { return { text: it.name + '：' + it.qty, qty: it.qty }; }) : [{ text: p.品目テキスト ? '（読めない）' + p.品目テキスト : '', qty: '' }];
+    touchedShips[shipId] = true;
+    var entries = p.items.length ? p.items.map(function (it) { return { name: it.name, text: it.name + '：' + it.qty, qty: it.qty }; })
+      : [{ name: p.品目テキスト ? '（読めない）' + p.品目テキスト : '', text: p.品目テキスト ? '（読めない）' + p.品目テキスト : '', qty: '' }];
     entries.forEach(function (e) {
-      var k0 = [shipId, p.コンテナNO, e.text].join('|');
+      var k0 = [shipId, p.コンテナNO, e.name].join('|');
       seen[k0] = (seen[k0] || 0) + 1;
-      var vals = { コンテナタイプ: p.コンテナタイプ, 数量: e.qty, 配達予定日: p.配達予定日 || '', 配達先コード: p.配達先名, 要確認: (p.要確認 || []).join(' / ') };
-      var old = byKey[keyOf(shipId, p.コンテナNO, e.text, seen[k0])];
+      var vals = { 品目テキスト: e.text, コンテナタイプ: p.コンテナタイプ, 数量: e.qty, 配達予定日: p.配達予定日 || '', 配達先コード: p.配達先名, 要確認: (p.要確認 || []).join(' / ') };
+      var old = byKey[k0 + '|' + seen[k0]];
       if (old) {
+        matched[old.出荷明細ID] = true;
         var ch = diff_(old, vals);
         if (Object.keys(ch).length) updates.push({ idField: '出荷明細ID', id: old.出荷明細ID, changes: ch });
         return;
       }
       branch[shipId] = (branch[shipId] || 0) + 1;
-      inserts.push(Object.assign({ 出荷明細ID: lineId(shipId, branch[shipId]), 便ID: shipId, コンテナNO: p.コンテナNO, 品目テキスト: e.text, 明細ID: '', 紐付状態: '未紐付', 候補: '', _item: { name: e.text.split('：')[0], qty: e.qty } }, vals));
+      var row = Object.assign({ 出荷明細ID: lineId(shipId, branch[shipId]), 便ID: shipId, コンテナNO: p.コンテナNO, 明細ID: '', 紐付状態: '未紐付', 候補: '' }, vals);
+      Object.defineProperty(row, '_item', { enumerable: false, writable: true, value: { name: e.name, qty: e.qty } });
+      inserts.push(row);
     });
   });
-  inserts.forEach(function (r) { Object.defineProperty(r, '_item', { enumerable: false, value: r._item, writable: true }); });
-  return { inserts: inserts, updates: updates };
+  var stale = existing.filter(function (r) { return touchedShips[r.便ID] && !matched[r.出荷明細ID]; });
+  return { inserts: inserts, updates: updates, stale: stale };
+}
+
+/** 確定済み出荷明細の変更（日付・数量・場所）を、まだ入荷していない入荷予定に反映する。 */
+function receiptPlanUpdates(shipLines, receipts) {
+  var byKey = {};
+  shipLines.forEach(function (s) { if (s.紐付状態 === '確定' && s.明細ID) byKey[s.便ID + '|' + s.明細ID] = s; });
+  var out = [];
+  receipts.forEach(function (r) {
+    if (!r.便ID || (r.実績数 !== '' && r.実績数 !== null && r.実績数 !== undefined)) return;
+    var s = byKey[r.便ID + '|' + r.明細ID];
+    if (!s) return;
+    var ch = diff_(r, { 入荷予定日: s.配達予定日 || '', 予定数: s.数量, 納品場所: s.配達先コード });
+    if (Object.keys(ch).length) out.push({ idField: '入荷ID', id: r.入荷ID, changes: ch });
+  });
+  return out;
 }
 
 /** 手入力の便で便IDが空の行に採番する。 */
@@ -149,4 +175,4 @@ function shipmentStage(ship, shipLines, receipts, today) {
   return '出航前';
 }
 
-if (typeof module !== 'undefined') module.exports = { buildReceiptPlans: buildReceiptPlans, shipmentStage: shipmentStage, matchCandidates: matchCandidates, upsertShipments: upsertShipments, upsertShipLines: upsertShipLines, assignShipmentIds: assignShipmentIds, shipmentFolderName: shipmentFolderName };
+if (typeof module !== 'undefined') module.exports = { receiptPlanUpdates: receiptPlanUpdates, buildReceiptPlans: buildReceiptPlans, shipmentStage: shipmentStage, matchCandidates: matchCandidates, upsertShipments: upsertShipments, upsertShipLines: upsertShipLines, assignShipmentIds: assignShipmentIds, shipmentFolderName: shipmentFolderName };

@@ -38,11 +38,17 @@ function parseItemText(text) {
   return { items: items, unreadable: unreadable };
 }
 
-function parseStatusMemos(memos, refYear) {
+/** 年なしのM/Dが基準日より半年以上前なら翌年とみなす（12月出航→1月着など）。 */
+function rollYear_(d, ref) {
+  if (!d || !ref) return d;
+  return d.getTime() < ref.getTime() - 180 * 864e5 ? new Date(d.getFullYear() + 1, d.getMonth(), d.getDate()) : d;
+}
+
+function parseStatusMemos(memos, refYear, refDate) {
   var out = { 輸入許可日: null, 倉庫連絡日: null, 納品確認日: null };
   (memos || []).forEach(function (m) {
     var s = z2h_(m || '');
-    var d = parseLooseDate(s, refYear);
+    var d = rollYear_(parseLooseDate(s, refYear), refDate);
     if (!d) return;
     if (/輸入許可/.test(s)) out.輸入許可日 = d;
     else if (/ロジスコ連絡|倉庫連絡/.test(s)) out.倉庫連絡日 = d;
@@ -75,7 +81,7 @@ function parseNxSheet(values, origin) {
     var no = str_(get('no')), shipper = str_(get('shipper'));
     if (no || shipper) {
       var etd = parseLooseDate(get('etd'));
-      var status = parseStatusMemos(memoCols.map(function (i) { return row[i]; }), etd ? etd.getFullYear() : null);
+      var status = parseStatusMemos(memoCols.map(function (i) { return row[i]; }), etd ? etd.getFullYear() : null, etd);
       cur = { key: origin + '|' + (no || shipper + ':' + r), 発地: origin, shipper: shipper, 'INV NO': str_(get('inv')), 'H B/L': str_(get('hbl')),
         'M B/L': str_(get('mbl')), VESSEL: str_(get('vessel')), ETD: etd, ETA: parseLooseDate(get('eta')), NX管理番号: str_(get('nx')),
         輸入許可日: status.輸入許可日, 倉庫連絡日: status.倉庫連絡日 };
@@ -87,7 +93,7 @@ function parseNxSheet(values, origin) {
     var refYear = cur.ETD ? cur.ETD.getFullYear() : null;
     var delRaw = get('del');
     var base = { key: cur.key, 'H B/L': cur['H B/L'], コンテナNO: cont, コンテナタイプ: str_(get('type')),
-      配達予定日: parseLooseDate(delRaw, refYear), 配達先名: str_(get('dest')) };
+      配達予定日: rollYear_(parseLooseDate(delRaw, refYear), cur.ETD), 配達先名: str_(get('dest')) };
     var flags = [];
     if (!base.配達予定日) flags.push('配達予定日なし');
     if (!text) { shipLines.push(Object.assign({}, base, { 品目テキスト: '', items: [], 要確認: flags.concat(['品目なし']) })); continue; }

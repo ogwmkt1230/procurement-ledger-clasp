@@ -7,12 +7,17 @@ function migrateBrandPrompt() {
   var brand = res.getResponseText().trim();
   var ids = JSON.parse(PropertiesService.getScriptProperties().getProperty('YOMI_IDS') || '{}');
   if (!ids[brand]) throw new Error('スクリプトプロパティ YOMI_IDS に ' + brand + ' のIDがありません');
-  var r = migrateBrand(ids[brand], brand);
+  assertOwner_();
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) throw new Error('ほかの処理が実行中です');
+  var r;
+  try { r = migrateBrand(ids[brand], brand); } finally { lock.releaseLock(); }
   ui.alert(brand + ' 移行: 明細 ' + r.lines + '件 / 要確認 ' + r.warnings + '件 / 照合 ' + (r.reconcile.ok ? 'OK' : '差 ' + r.reconcile.diff));
 }
 
 /** 旧ヨミ表1本を読み、未完了の発注だけを台帳に入れる。 */
 function migrateBrand(spreadsheetId, brand) {
+  if (alreadyMigrated(readObjects_('input'), brand)) throw new Error(brand + ' は移行済みです（発注明細入力にメモ「移行:」の行があります）');
   var src = SpreadsheetApp.openById(spreadsheetId);
   var suppliers = readObjects_('mSuppliers');
   var logRows = [], newInput = [], openings = [], pays = [], oldUnreceived = 0;
@@ -55,7 +60,8 @@ function migrateBrand(spreadsheetId, brand) {
   var ss = SpreadsheetApp.getActive();
   var log = ss.getSheetByName('移行ログ') || ss.insertSheet('移行ログ');
   if (log.getLastRow() === 0) log.appendRow(['日時', 'ブランド', 'タブ', '品名', '内容']);
-  logRows.forEach(function (r) { log.appendRow([now, brand].concat(r)); });
+  var out = logRows.map(function (r) { return [now, brand].concat(r); });
+  if (out.length) log.getRange(log.getLastRow() + 1, 1, out.length, 5).setValues(out);
   log.appendRow([now, brand, '（照合）', '', '旧未納品 ' + oldUnreceived + ' / 台帳発注残 ' + ledgerRemaining + (rec.ok ? ' 一致' : ' 差 ' + rec.diff)]);
   return { lines: newInput.length, warnings: logRows.length, reconcile: rec };
 }

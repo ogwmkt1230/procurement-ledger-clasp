@@ -2,6 +2,12 @@ var VIEW_SHEETS_ = { yomi: 'V_ヨミ表', backlog: 'V_発注残', transit: 'V_�
 
 /** 台帳からビューを作り直す（1時間ごと＋メニュー）。 */
 function renderViews() {
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) return;
+  try { renderViewsLocked_(); } finally { lock.releaseLock(); }
+}
+
+function renderViewsLocked_() {
   var lines = readObjects_('input').filter(function (l) { return l.明細ID; });
   var receipts = readObjects_('receipts'), payments = readObjects_('payments');
   var ships = readObjects_('shipments'), shipLines = readObjects_('shipLines'), items = readObjects_('mItems');
@@ -22,8 +28,7 @@ function writeView_(name, view) {
   sh.setFrozenRows(1);
   sh.getRange(1, 1, 1, view.headers.length).setFontWeight('bold');
   if (!sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).length) {
-    var p = sh.protect().setDescription('auto:view');
-    p.removeEditors(p.getEditors().filter(function (u) { return u.getEmail() !== Session.getEffectiveUser().getEmail(); }));
-    if (p.canDomainEdit()) p.setDomainEdit(false);
+    // 警告のみ：誰がメニューから更新しても書けるようにし、手での編集には警告を出す
+    sh.protect().setDescription('auto:view').setWarningOnly(true);
   }
 }

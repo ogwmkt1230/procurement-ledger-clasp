@@ -13,15 +13,15 @@ function onEditInstalled(e) {
   if (!e || !e.range) return;
   var name = e.range.getSheet().getName();
   var handlers = {};
-  handlers[SHEETS.input.name] = 'handleInputEdit_';
-  handlers[SHEETS.shipments.name] = 'handleShipmentEdit_';
-  handlers[SHEETS.shipLines.name] = 'handleShipLineEdit_';
+  handlers[SHEETS.input.name] = handleInputEdit_;
+  handlers[SHEETS.shipments.name] = handleShipmentEdit_;
+  handlers[SHEETS.shipLines.name] = handleShipLineEdit_;
   var fn = handlers[name];
   if (!fn || e.range.getRow() < 2) return;
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(20000)) return;
   try {
-    this[fn](e.range.getSheet(), e.range.getRow(), e.range.getNumRows());
+    fn(e.range.getSheet(), e.range.getRow(), e.range.getNumRows());
   } finally {
     lock.releaseLock();
   }
@@ -35,9 +35,31 @@ function readObjects_(key) {
   return rowsToObjects(key, sh.getRange(2, 1, n, SHEETS[key].headers.length).getValues());
 }
 
+function ensureRows_(sh, lastNeeded) {
+  var max = sh.getMaxRows();
+  if (lastNeeded > max) sh.insertRowsAfter(max, Math.max(lastNeeded - max, 1000));
+}
+
+/** 変わった列のセルだけ書く（保護列を不用意に書かないため）。 */
+function writeChanges_(key, rowNumber, changes) {
+  var sh = SpreadsheetApp.getActive().getSheetByName(SHEETS[key].name);
+  Object.keys(changes).forEach(function (h) {
+    var v = changes[h];
+    sh.getRange(rowNumber, colIndex(key, h) + 1).setValue(v === null || v === undefined ? '' : v);
+  });
+}
+
+/** メニュー操作（取り込み・移行）は台帳の所有者だけが実行する。 */
+function assertOwner_() {
+  var owner = PropertiesService.getScriptProperties().getProperty('OWNER_EMAIL');
+  var me = Session.getActiveUser().getEmail();
+  if (owner && me && owner !== me) throw new Error('この操作は台帳の管理者（' + owner + '）が実行してください');
+}
+
 function writeRowObjects_(key, startRow, objs) {
   if (!objs.length) return;
   var sh = SpreadsheetApp.getActive().getSheetByName(SHEETS[key].name);
+  ensureRows_(sh, startRow + objs.length - 1);
   sh.getRange(startRow, 1, objs.length, SHEETS[key].headers.length).setValues(objs.map(function (o) { return objectToRow(key, o); }));
 }
 

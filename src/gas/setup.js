@@ -12,11 +12,16 @@ function setupLedger() {
       var cur = sh.getRange(1, 1, 1, def.headers.length).getValues()[0];
       if (cur.join('\t') !== def.headers.join('\t')) throw new Error(def.name + ' の見出しが定義と違います');
     }
+    ensureRows_(sh, LEDGER_ROWS_);
     applyValidation_(sh, k);
     protectColumns_(sh, k);
   });
   ensureTriggers_();
+  PropertiesService.getScriptProperties().setProperty('OWNER_EMAIL', Session.getEffectiveUser().getEmail());
 }
+
+/** 入力規則と保護をかける行数。シートの上限行を先に広げておき、後から増えた行が規則の外に出ないようにする。 */
+var LEDGER_ROWS_ = 20000;
 
 function applyValidation_(sh, key) {
   var def = SHEETS[key];

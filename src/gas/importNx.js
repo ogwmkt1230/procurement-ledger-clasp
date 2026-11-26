@@ -1,5 +1,12 @@
 /** 受け取りフォルダの未処理xlsxをすべて取り込む（メニューから）。 */
 function importNxFromInbox() {
+  assertOwner_();
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) throw new Error('ほかの処理が実行中です。少し待ってからやり直してください');
+  try { importNxFromInboxLocked_(); } finally { lock.releaseLock(); }
+}
+
+function importNxFromInboxLocked_() {
   var props = PropertiesService.getScriptProperties();
   var inbox = DriveApp.getFolderById(props.getProperty('NX_INBOX_FOLDER_ID'));
   var done = getOrCreateSubfolder_(inbox, '処理済');
@@ -47,6 +54,7 @@ function applyNxParsed_(parsed, now, log) {
   var lines = readObjects_('shipLines');
   var lu = upsertShipLines(lines, parsed.shipLines, idByKey);
   applyUpdates_('shipLines', lines, lu.updates);
+  lu.stale.forEach(function (r) { log.warnings.push('NXの表から消えた出荷明細: ' + r.出荷明細ID + ' ' + r.品目テキスト + (r.紐付状態 === '確定' ? '（確定済み・要確認）' : '')); });
 
   var shipperById = {};
   ships.concat(su.inserts).forEach(function (s) { shipperById[s.便ID] = s.shipper; });
@@ -60,6 +68,8 @@ function applyNxParsed_(parsed, now, log) {
     if (c.length && c[0].score === 100) { r.明細ID = c[0].明細ID; r.紐付状態 = '候補あり'; }
   });
   appendRowObjects_('shipLines', lu.inserts);
+  var allLines = readObjects_('shipLines');
+  applyUpdates_('receipts', receipts, receiptPlanUpdates(allLines, receipts));
   log.lineIns += lu.inserts.length; log.lineUpd += lu.updates.length;
   log.flags += lu.inserts.filter(function (r) { return r.要確認; }).length;
 }
@@ -73,7 +83,7 @@ function applyUpdates_(key, existing, updates) {
     var i = rowById[u.id];
     if (i === undefined) return;
     Object.assign(existing[i], u.changes);
-    writeRowObjects_(key, i + 2, [existing[i]]);
+    writeChanges_(key, i + 2, u.changes);
   });
 }
 

@@ -80,9 +80,13 @@ function selectOpenRows(mapped) {
   });
 }
 
+function alreadyMigrated(inputRows, brand) {
+  return inputRows.some(function (r) { return r.ブランド === brand && String(r.メモ || '').indexOf('移行:') === 0; });
+}
+
 function reconcileBrand(oldTotal, ledgerTotal) {
   var diff = Math.abs(Number(oldTotal) - Number(ledgerTotal));
   return { ok: diff === 0, diff: diff };
 }
 
-if (typeof module !== 'undefined') module.exports = { detectLayout: detectLayout, mapYomiRow: mapYomiRow, selectOpenRows: selectOpenRows, reconcileBrand: reconcileBrand };
+if (typeof module !== 'undefined') module.exports = { alreadyMigrated: alreadyMigrated, detectLayout: detectLayout, mapYomiRow: mapYomiRow, selectOpenRows: selectOpenRows, reconcileBrand: reconcileBrand };

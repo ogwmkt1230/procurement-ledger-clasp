@@ -2,6 +2,7 @@
 function handleShipLineEdit_(sheet, startRow, numRows) {
   var lines = readObjects_('shipLines').slice(startRow - 2, startRow - 2 + numRows);
   var receipts = readObjects_('receipts');
+  applyUpdates_('receipts', receipts, receiptPlanUpdates(lines, receipts));
   var plans = buildReceiptPlans(lines, receipts, []);
   if (!plans.length) return;
   var ids = receipts.map(function (r) { return r.入荷ID; });
