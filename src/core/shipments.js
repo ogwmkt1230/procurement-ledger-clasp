@@ -117,4 +117,36 @@ function shipmentFolderName(s) {
   return [s.便ID, s.shipper, s['H B/L'] || s['M B/L'] || 'BL未定'].map(function (x) { return String(x || '').trim().replace(/[\\/:*?"<>|]/g, '_'); }).join('_');
 }
 
-if (typeof module !== 'undefined') module.exports = { matchCandidates: matchCandidates, upsertShipments: upsertShipments, upsertShipLines: upsertShipLines, assignShipmentIds: assignShipmentIds, shipmentFolderName: shipmentFolderName };
+/** 確定済み出荷明細から、まだ無い入荷予定行を作る。 */
+function buildReceiptPlans(shipLines, receipts, lines) {
+  var have = {};
+  receipts.forEach(function (r) { if (r.便ID) have[r.便ID + '|' + r.明細ID] = true; });
+  var out = [];
+  shipLines.forEach(function (s) {
+    if (s.紐付状態 !== '確定' || !s.明細ID) return;
+    var k = s.便ID + '|' + s.明細ID;
+    if (have[k]) return;
+    have[k] = true;
+    out.push({ 入荷ID: '', 明細ID: s.明細ID, 便ID: s.便ID, 入荷予定日: s.配達予定日 || '', 予定数: s.数量, 納品場所: s.配達先コード });
+  });
+  return out;
+}
+
+function dt_(v) { if (!v) return null; var d = v instanceof Date ? v : new Date(v); return isNaN(d.getTime()) ? null : d; }
+
+function shipmentStage(ship, shipLines, receipts, today) {
+  var mine = shipLines.filter(function (l) { return l.便ID === ship.便ID && l.紐付状態 === '確定'; });
+  if (mine.length) {
+    var got = {};
+    receipts.forEach(function (r) { if (r.便ID === ship.便ID && r.実績数 !== '' && r.実績数 !== null && r.実績数 !== undefined) got[r.明細ID] = true; });
+    if (mine.every(function (l) { return got[l.明細ID]; })) return '納品済';
+  }
+  if (dt_(ship.倉庫連絡日)) return '倉庫連絡済';
+  if (dt_(ship.輸入許可日)) return '輸入許可済';
+  var etd = dt_(ship.ETD), eta = dt_(ship.ETA);
+  if (eta && eta <= today) return '入港済';
+  if (etd && etd <= today) return '輸送中';
+  return '出航前';
+}
+
+if (typeof module !== 'undefined') module.exports = { buildReceiptPlans: buildReceiptPlans, shipmentStage: shipmentStage, matchCandidates: matchCandidates, upsertShipments: upsertShipments, upsertShipLines: upsertShipLines, assignShipmentIds: assignShipmentIds, shipmentFolderName: shipmentFolderName };
