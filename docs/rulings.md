@@ -1,0 +1,37 @@
+# 実装時の判断（ルーリング）と保留した軽微な指摘
+
+- | T9←T3,T4,T8 | backlog yen | Ruling: viewBacklogByMonth yen = lineAmountJpy(line)/数量×remaining (reuses T3 入数 logic) — keeps one money rule — cost if wrong: view yen differs from 金額(円) basis |
+- Ruling: GAS-only manual steps (clasp push, run in sheet, Drive conversion) cannot run in this cloud sandbox — GAS files are written and syntax-checked with `node --check`; manual checks are handed to Makoto's PC — cost if wrong: GAS-integration bugs surface at first run on PC
+- Ruling: Task 11 (04 script) needs 04 scriptId and clasp auth on Makoto's PC; Task 12 cutover date is Makoto's — produce docs/templates and helper only, no edits to 04 or Drive — cost if wrong: those tasks remain open
+- Ruling: Node 22 used instead of Node 20 (node:test same API) — none
+- Task 1: Ruling: appsscript.json lives in src/ (clasp rootDir) instead of repo root — clasp requires it in rootDir — none
+- Task 1: Ruling: added 候補 column to shipLines (stores matchCandidates summary) and rowsToObjects/objectToRow helpers — Task 7 must write candidates somewhere; plan said 'write the result' without a column — cost if wrong: extra column
+- Task 1: Ruling: test script is 'node --test tests/*.test.js' — Node 22 treats a bare directory arg as a module path — none
+- Task 1: Ruling: edit handling uses an installable trigger onEditInstalled (not simple onEdit) — simple triggers cannot call Drive/protected writes as owner — cost if wrong: none functional
+- Task 3: Ruling: GAS edit handling put in new file src/gas/inputHandler.js (plan said triggers.js) — keeps triggers.js a dispatcher — none
+- Task 5: Ruling: shipment identity key = 発地|No.（NXの便番号） instead of H B/L — real file has bookings (No.33-38) with blank H B/L that get one later; keying on H B/L would duplicate them on re-import — cost if wrong: if NX renumbers a sheet, re-import creates duplicates (visible in 取込ログ)
+- Task 5: Ruling: parseItemText also extracts container numbers ([A-Z]{4}\d{7}) from item lines ('＊YMMU6593620' header line, '…：FSCU8827226', 'TGBU2323986(20)：…') and assigns items to that container; otherwise to the row's container — real data puts several containers' items in the first row — cost if wrong: items land on wrong container line, human fixes at 確定
+- Task 6: Ruling: matchCandidates skips lines with remaining 0 or 状態 取消 (added test) — candidates for closed lines would mislead confirmers — cost if wrong: an over-delivery shipment shows no candidate and needs manual linking
+- Task 7: Ruling: 便 sheet gets column 'NX便キー' (発地|No.) as the upsert key (follows Task 5 ruling); shipLines key = 便ID|コンテナNO|品目テキスト|出現順, one row per parsed item ('品名：数量') — cost if wrong: NX re-edits of an item's text create a new line and leave the old one (shown in 取込ログ as stale)
+- Task 7: Ruling: 出荷明細ID = 便ID-枝番2桁; upsert updates are {idField,id,changes} (plan: {便ID,changes}) — one shape for both sheets — none
+- Task 8: Ruling: 入荷ID = RC-YYMM-###, 支払ID = PY-YYMM-### via nextSerialId — plan left format open; volume ~70/month fits 999 — cost if wrong: >999 receipts in a month throws
+- Task 9: Ruling: viewMismatch takes a 5th arg today (needed for the 14-day 未紐付 rule); viewInTransit hides 納品済 shipments; 元々納品月/実際納品月 use 04's 'YYYY年M月' format — cost if wrong: cosmetic
+- Task 9: Ruling: 単価差 is only checked for 円 lines (added test) — 納品書 is in yen while foreign lines hold foreign unit price; comparing would flag every import — cost if wrong: foreign price errors not caught by this view
+- Task 10: Ruling: IMINE '支払い前金' quantities ('11/4送金：26,400箱') are remittances, not receipts — mapped to payment rows (区分 '前金 26,400箱', 送金日) and receipts stay empty; plan/Task4 wording that called them deliveries was a misread — cost if wrong: none for code; backlog for IMINE VA stays 150,000 until warehouse receipts are recorded
+- Task 10: Ruling: overseas unit price = 合計金額（円）÷発注数 kept unrounded (413.6, not 414) — rounding would change the yen total (62,100,000 vs 62,040,000) and break the reconcile gate — cost if wrong: cosmetic decimals in 単価
+- Task 10: Ruling: 稟議AP taken from 稟議 column, else first /AP\d+/ found anywhere in the row (IMINE stores it under 納品数MEMO); 種別 mapped: '*商品原価'/'商品'→商品, '販促品'→販促物, name/内容 containing 開発→開発費, 金型→金型, else 要確認 warning — cost if wrong: kind mislabels surface in V_ヨミ表 and are fixed by hand
+- Task 10: Ruling: rows whose 内容/メモ contain '取消' map to 状態 取消 and are not migrated (added test); Straine keep-test uses the same row with 取消 removed — migrating cancelled orders would create false backlog — cost if wrong: a partially cancelled order is skipped and must be entered by hand
+- Task 10: Ruling: partially received rows get one opening receipt (実績数 = 発注数−未納品, 確認者 '移行時点の入荷済') instead of re-linking every 04 receipt row by code/date — exact and makes the reconcile gate hold by construction; 04 history stays readable in the frozen sheet — cost if wrong: per-delivery history before cutover is not in the ledger
+- Task 10: Ruling: reconcile gate compares Σ未納品 read from the brand's yomi supplier tabs with Σ発注残 in the ledger for the migrated lines (quantity), not the old 発注残 tab (that tab totals yen by month in a free layout) — cost if wrong: a yen-level mismatch in the old tab isn't caught automatically
+- Task 10: Ruling: LOEM (04 '入荷まとめ_LOEM') has no yomi tab; its open items are entered by the 商品担当 into 発注明細入力 at cutover rather than auto-migrated — layout not inspected in this session — cost if wrong: manual entry effort for LOEM
+- Task 11: Ruling: completed as notes + getInboundRows_ template only; clone/edit/verify of 04 script deferred to Makoto's PC (needs scriptId + clasp auth; edits a live shared tool) — cost if wrong: 04 repointing still open before cutover
+- Task 12: Ruling: checklist written; executing it (cutover date, freezing sheets) is Makoto's decision and a shared-sheet side effect — cost if wrong: none
+- Final: Ruling: #5 row limit / #6 protected cells / #8 locks fixed in GAS-only code (sheets pre-expanded to 20000 rows + ensureRows_; changed-cell writes; views warning-only protection; import/migration owner-only via OWNER_EMAIL; document locks on import/migration/views) — no unit test possible outside Apps Script; verified by node --check and gas-scope test — cost if wrong: surfaces on first PC run
+- Final: minor (deferred): 品目なし flagged even when another row lists that container's items (noisy 要確認)
+- Final: minor (deferred): blank No. falls back to shipper+row index key (row insert → duplicate)
+- Final: minor (deferred): 配達先コード stores NX free-text name, not 配達先マスタ code
+- Final: minor (deferred): 会計区分 from 種別 only, not 仕入先×種別
+- Final: minor (deferred): edits starting at row 1 skipped; failed tryLock drops edit silently
+- Final: minor (deferred): changing 明細ID on an already 確定 line leaves old receipt plan
+- Final: minor (deferred): leading-zero text (INV/NX番号) coerced by Sheets → needless updates
+- Final: minor (deferred): 候補あり lines not covered by 14-day rule
