@@ -22,7 +22,7 @@ var SHEETS = {
   mItems: { name: '商品マスタ', key: '商品コード', headers: ['商品コード','品名','ブランド','別名'], required: [], protected: [] },
   mSuppliers: { name: '仕入先マスタ', key: '仕入先コード', headers: ['仕入先コード','仕入先名','ブランド','国内海外','通貨','支払条件','shipper別名'], required: [], protected: [] },
   mKinds: { name: '種別マスタ', key: '種別', headers: ['種別','会計区分'], required: [], protected: [] },
-  mDest: { name: '配達先マスタ', key: '配達先コード', headers: ['配達先コード','名称','住所'], required: [], protected: [] },
+  mDest: { name: '配達先マスタ', key: '配達先コード', headers: ['配達先コード','名称','住所','別名'], required: [], protected: [] },
 };
 
 var ENUMS = {

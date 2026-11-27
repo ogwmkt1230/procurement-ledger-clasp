@@ -30,9 +30,37 @@ test('nx: 区切りと全角のゆれ', () => {
   assert.strictEqual(parseItemText('ピンクリフト：5,000"').items[0].qty, 5000);
 });
 test('nx: 品名が数字だけの行は読めない扱い', () => {
-  const r = parseItemText('＊VA：76,963\n40：21,542');
+  const r = parseItemText('12：345');
+  assert.deepStrictEqual(r.items, []);
+  assert.deepStrictEqual(r.unreadable, ['12：345']);
+});
+test('nx: 品目の下の「40：数量」「20：数量」はコンテナサイズ別の内訳', () => {
+  const r = parseItemText('＊VA：76,963\n40：21,542\n40：22,285\n40：21,995\n20：11,141');
+  assert.deepStrictEqual(r.unreadable, []);
   assert.deepStrictEqual(r.items.map(i => [i.name, i.qty]), [['VA', 76963]]);
-  assert.deepStrictEqual(r.unreadable, ['40：21,542']);
+  assert.deepStrictEqual(r.items[0].breakdown, [{ size: '40', qty: 21542 }, { size: '40', qty: 22285 }, { size: '40', qty: 21995 }, { size: '20', qty: 11141 }]);
+});
+test('nx: 釜山発|1 の内訳を便のコンテナにサイズ別・行順で割り当てる', () => {
+  const r = parseNxSheet(fx['釜山発'], '釜山発');
+  const ls = r.shipLines.filter(l => l.key === '釜山発|1');
+  const got = ls.map(l => [l.コンテナNO, l.items.map(i => i.name + ':' + i.qty).join(','), l.要確認.join(' / ')]);
+  assert.deepStrictEqual(got, [
+    ['TEMU0319740', 'VA:11141', ''],
+    ['BEAU6266000', 'VA:21542', ''],
+    ['TEMU8547406', 'VA:22285', ''],
+    ['FFAU5476461', 'VA:21995', ''],
+  ]);
+  assert.deepStrictEqual(r.warnings, []);
+});
+test('nx: 内訳がコンテナ数や合計と合わなければ割り当てず要確認', () => {
+  const head = ['', 'shipper', 'INV NO', 'H B/L NO', 'M B/L NO', 'コンテナNO', 'コンテナタイプ', 'ETD', '配達予定日', '配達先', '対象商品'];
+  const rows = [head,
+    [1, 'iMINE', '', 'HB1', '', 'AAAU1111111', '20F DRY x 1', 46339, 46351, '', 'VA：100\n40：60\n40：40'],
+    ['', '', '', '', '', 'BBBU2222222', '40F DRY', '', 46351, '', '']];
+  const ls = parseNxSheet(rows, '釜山発').shipLines;
+  const a = ls.find(l => l.コンテナNO === 'AAAU1111111');
+  assert.deepStrictEqual(a.items.map(i => i.qty), [100]);
+  assert.ok(a.要確認.some(f => f.startsWith('内訳を割り当てられない')));
 });
 test('nx: 品目行のコンテナ番号', () => {
   const r = parseItemText('＊YMMU6593620\nリフトプロ：10,000\n黒リフト：2,880');
@@ -69,5 +97,16 @@ test('nx: H B/L未定の便も取り込む', () => {
 test('nx: ステータスメモ', () => {
   const s = parseStatusMemos(['6/8 輸入許可証済', '6/8 ロジスコ連絡済', '6/10 納品確認済'], 2026);
   assert.deepStrictEqual([ymd(s.輸入許可日), ymd(s.倉庫連絡日), ymd(s.納品確認日)], ['2026-06-08', '2026-06-08', '2026-06-10']);
-  assert.strictEqual(parseStatusMemos(['6/10 輸入気箇所済'], 2026).輸入許可日, null);
+});
+test('nx: キーワードの無いメモは列の位置で読む（1列目=輸入許可日）', () => {
+  const s = parseStatusMemos(['6/10 輸入気箇所済', '6/10 ロジスコ連絡済', ''], 2026);
+  assert.deepStrictEqual([ymd(s.輸入許可日), ymd(s.倉庫連絡日)], ['2026-06-10', '2026-06-10']);
+  const t = parseStatusMemos(['', '7/31 輸入許可書', ''], 2026);
+  assert.deepStrictEqual([ymd(t.輸入許可日), t.倉庫連絡日], ['2026-07-31', null]);
+  const u = parseStatusMemos(['6/8 輸入許可済', '6/9', '済'], 2026);
+  assert.deepStrictEqual([ymd(u.輸入許可日), ymd(u.倉庫連絡日), u.納品確認日], ['2026-06-08', '2026-06-09', null]);
+});
+test('nx: 蛇口発|5 の輸入許可日（打ち間違い）を拾う', () => {
+  const s = parseNxSheet(fx['蛇口発'], '蛇口発').shipments.find(x => x.key === '蛇口発|5');
+  assert.strictEqual(ymd(s.輸入許可日), '2026-06-10');
 });
