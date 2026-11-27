@@ -1,4 +1,15 @@
 function aliases_(s) { return String(s || '').split('|').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean); }
+function normDest_(s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); }
+
+/** NXの配達先の書き方 → 配達先マスタのコード（名称か別名に一致）。引き当てられなければ要確認の文言を返す。 */
+function resolveDest(name, dests) {
+  var n = normDest_(name);
+  if (!n) return { code: '', flag: '' };
+  var hit = (dests || []).filter(function (d) {
+    return [d.名称].concat(String(d.別名 || '').split('|')).some(function (a) { return normDest_(a) && normDest_(a) === n; });
+  })[0];
+  return hit ? { code: String(hit.配達先コード), flag: '' } : { code: '', flag: '配達先不明: ' + String(name).replace(/\s*\n\s*/g, ' ').trim() };
+}
 function containsEither_(a, b) { a = a.toLowerCase(); b = b.toLowerCase(); return a.indexOf(b) >= 0 || b.indexOf(a) >= 0; }
 
 /** 品目1つに対する明細候補（最大3件、score降順・納期の早い順）。 */
@@ -74,7 +85,7 @@ function itemNameOf_(text) {
   if (t.indexOf('（読めない）') === 0 || t.indexOf('：') < 0) return t;
   return t.slice(0, t.lastIndexOf('：'));
 }
-function upsertShipLines(existing, parsed, shipIdByKey) {
+function upsertShipLines(existing, parsed, shipIdByKey, dests) {
   var byKey = {}, branch = {}, cnt = {};
   var keyOf = function (shipId, cont, name, n) { return [shipId, cont, name, n].join('|'); };
   existing.forEach(function (r) {
@@ -94,7 +105,9 @@ function upsertShipLines(existing, parsed, shipIdByKey) {
     entries.forEach(function (e) {
       var k0 = [shipId, p.コンテナNO, e.name].join('|');
       seen[k0] = (seen[k0] || 0) + 1;
-      var vals = { 品目テキスト: e.text, コンテナタイプ: p.コンテナタイプ, 数量: e.qty, 配達予定日: p.配達予定日 || '', 配達先コード: p.配達先名, 要確認: (p.要確認 || []).join(' / ') };
+      var dest = dests ? resolveDest(p.配達先名, dests) : { code: p.配達先名, flag: '' };
+      var vals = { 品目テキスト: e.text, コンテナタイプ: p.コンテナタイプ, 数量: e.qty, 配達予定日: p.配達予定日 || '', 配達先コード: dest.code,
+        要確認: (p.要確認 || []).concat(dest.flag ? [dest.flag] : []).join(' / ') };
       var old = byKey[k0 + '|' + seen[k0]];
       if (old) {
         matched[old.出荷明細ID] = true;
@@ -175,4 +188,4 @@ function shipmentStage(ship, shipLines, receipts, today) {
   return '出航前';
 }
 
-if (typeof module !== 'undefined') module.exports = { receiptPlanUpdates: receiptPlanUpdates, buildReceiptPlans: buildReceiptPlans, shipmentStage: shipmentStage, matchCandidates: matchCandidates, upsertShipments: upsertShipments, upsertShipLines: upsertShipLines, assignShipmentIds: assignShipmentIds, shipmentFolderName: shipmentFolderName };
+if (typeof module !== 'undefined') module.exports = { resolveDest: resolveDest, receiptPlanUpdates: receiptPlanUpdates, buildReceiptPlans: buildReceiptPlans, shipmentStage: shipmentStage, matchCandidates: matchCandidates, upsertShipments: upsertShipments, upsertShipLines: upsertShipLines, assignShipmentIds: assignShipmentIds, shipmentFolderName: shipmentFolderName };

@@ -54,7 +54,7 @@ function applyNxParsed_(parsed, now, log) {
   var idByKey = new Map();
   ships.concat(su.inserts).forEach(function (s) { if (s.NX便キー) idByKey.set(s.NX便キー, s.便ID); });
   var lines = readObjects_('shipLines');
-  var lu = upsertShipLines(lines, parsed.shipLines, idByKey);
+  var lu = upsertShipLines(lines, parsed.shipLines, idByKey, readObjects_('mDest'));
   applyUpdates_('shipLines', lines, lu.updates);
   lu.stale.forEach(function (r) { log.warnings.push('NXの表から消えた出荷明細: ' + r.出荷明細ID + ' ' + r.品目テキスト + (r.紐付状態 === '確定' ? '（確定済み・要確認）' : '')); });
 
