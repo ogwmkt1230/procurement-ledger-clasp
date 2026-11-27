@@ -5,7 +5,7 @@ function migrateBrandPrompt() {
   var res = ui.prompt('移行するブランド', 'Yunth / Brighte / Straine のどれかを入力', ui.ButtonSet.OK_CANCEL);
   if (res.getSelectedButton() !== ui.Button.OK) return;
   var brand = res.getResponseText().trim();
-  var ids = JSON.parse(PropertiesService.getScriptProperties().getProperty('YOMI_IDS') || '{}');
+  var ids = JSON.parse(getConfig_('YOMI_IDS') || '{}');
   if (!ids[brand]) throw new Error('スクリプトプロパティ YOMI_IDS に ' + brand + ' のIDがありません');
   assertOwner_();
   var lock = LockService.getDocumentLock();

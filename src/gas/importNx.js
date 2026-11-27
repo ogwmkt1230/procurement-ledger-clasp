@@ -8,7 +8,7 @@ function importNxFromInbox() {
 
 function importNxFromInboxLocked_() {
   var props = PropertiesService.getScriptProperties();
-  var inbox = DriveApp.getFolderById(props.getProperty('NX_INBOX_FOLDER_ID'));
+  var inbox = DriveApp.getFolderById(getConfig_('NX_INBOX_FOLDER_ID'));
   var done = getOrCreateSubfolder_(inbox, '処理済');
   var files = inbox.getFilesByType(MimeType.MICROSOFT_EXCEL);
   var n = 0;
@@ -88,7 +88,7 @@ function applyUpdates_(key, existing, updates) {
 }
 
 function ensureShipmentFolder_(s) {
-  var rootId = PropertiesService.getScriptProperties().getProperty('CUSTOMS_ROOT_FOLDER_ID') || '1bm51Cv0cWuOyjfmklHcrizNeVYisNH1f';
+  var rootId = getConfig_('CUSTOMS_ROOT_FOLDER_ID');
   return getOrCreateSubfolder_(DriveApp.getFolderById(rootId), shipmentFolderName(s)).getUrl();
 }
 
