@@ -1,6 +1,7 @@
 if (typeof module !== 'undefined') {
   var lineAmountJpy = require('./orders.js').lineAmountJpy;
   var shipmentStage = require('./shipments.js').shipmentStage;
+  var unlinkedReceipts = require('./shipments.js').unlinkedReceipts;
 }
 
 function d_(v) { if (!v) return null; var d = v instanceof Date ? v : new Date(v); return isNaN(d.getTime()) ? null : d; }
@@ -72,7 +73,15 @@ function viewReceiptPlan(receipts, lines, items) {
   return { headers: headers, rows: rows };
 }
 
-function viewMismatch(lines, receipts, shipLines, backlog, today) {
+/** 切替日（スクリプトプロパティの '2027/01/05'・'2027-01-05' や Date）→ その日の0時。読めなければ null（未設定と同じ）。 */
+function cutoverDate_(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  var m = String(v || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+function noGoods_(s) { return [s.品目テキスト, s.数量].every(function (v) { return v === '' || v === null || v === undefined; }); }
+
+function viewMismatch(lines, receipts, shipLines, backlog, today, cutover) {
   var headers = ['種類', '対象ID', '内容'];
   var rows = [], byLine = {};
   lines.forEach(function (l) { byLine[l.明細ID] = l; });
@@ -84,10 +93,19 @@ function viewMismatch(lines, receipts, shipLines, backlog, today) {
       rows.push(['数量差', r.入荷ID, '納品書 ' + r.納品書数量 + ' / 実績 ' + r.実績数]);
   });
   backlog.forEach(function (b, id) { b.errors.forEach(function (e) { rows.push([e, id, '発注 ' + b.ordered + ' / 入荷 ' + b.received]); }); });
-  var limit = new Date(today.getTime() - 14 * 864e5);
+  unlinkedReceipts(shipLines, receipts).forEach(function (r) {
+    var got = r.実績数 !== '' && r.実績数 !== null && r.実績数 !== undefined;
+    rows.push(['紐付なし入荷', r.入荷ID, '便 ' + r.便ID + ' / 明細 ' + r.明細ID + ' に確定の出荷明細がない' + (got ? '（実績 ' + r.実績数 + '）' : '') + '。入荷の明細IDを直すか、出荷明細を確定に戻す']);
+  });
+  // 14日ルール：配達予定日から14日たっても確定（明細IDあり）になっていない出荷明細。切替日より前に届いた便は紐付けようがないので出さない
+  var limit = new Date(today.getTime() - 14 * 864e5), from = cutoverDate_(cutover), hasGoods = {};
+  shipLines.forEach(function (s) { if (!noGoods_(s)) hasGoods[s.便ID] = true; });
   shipLines.forEach(function (s) {
     var d = d_(s.配達予定日);
-    if (s.紐付状態 === '未紐付' && d && d <= limit) rows.push(['未紐付14日超', s.出荷明細ID, s.品目テキスト || '']);
+    if (!d || d > limit || (from && d < from) || (s.紐付状態 === '確定' && s.明細ID)) return;
+    if (noGoods_(s) && hasGoods[s.便ID]) return; // 品目は同じ便の別の行にある（NXは便の品目を最初の行にまとめて書く。#6）
+    if (s.紐付状態 === '候補あり') rows.push(['候補あり14日超', s.出荷明細ID, (s.品目テキスト || '') + (s.明細ID ? '（候補 ' + s.明細ID + '）' : '')]);
+    else rows.push(['未紐付14日超', s.出荷明細ID, (s.品目テキスト || '') + (s.紐付状態 === '確定' ? '（確定だが明細IDが空）' : '')]);
   });
   return { headers: headers, rows: rows };
 }

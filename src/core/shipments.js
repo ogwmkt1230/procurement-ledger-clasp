@@ -171,6 +171,30 @@ function buildReceiptPlans(shipLines, receipts, lines) {
   return out;
 }
 
+/** 入荷のうち、確定の出荷明細からシステムが書く列。これ以外の列に値が1つでもあれば人の記録とみなし、消さない。 */
+var RECEIPT_PLAN_FIELDS_ = ['入荷ID', '明細ID', '便ID', '入荷予定日', '予定数', '納品場所'];
+function untouchedReceipt_(r) {
+  return Object.keys(r).every(function (k) { return RECEIPT_PLAN_FIELDS_.indexOf(k) >= 0 || blank_(r[k]) || r[k] === false; });
+}
+
+/** 便IDのある入荷のうち、同じ便ID×明細IDの確定済み出荷明細（明細IDあり）が1本も無いもの。 */
+function unlinkedReceipts(shipLines, receipts) {
+  var linked = {};
+  shipLines.forEach(function (s) { if (s.紐付状態 === '確定' && s.明細ID) linked[s.便ID + '|' + s.明細ID] = true; });
+  return receipts.filter(function (r) { return !blank_(r.便ID) && !linked[r.便ID + '|' + r.明細ID]; });
+}
+
+/** 確定が外れて残った入荷予定のうち、消してよいもの：自動で作った行（入荷IDあり）で、システムが書く列のほかに何も書かれていない。 */
+function orphanReceiptPlans(shipLines, receipts) {
+  return unlinkedReceipts(shipLines, receipts).filter(function (r) { return !blank_(r.入荷ID) && untouchedReceipt_(r); });
+}
+
+/** 消す直前の確かめ：読み直した行が、消すと決めた予定と入荷ID・便ID・明細IDが同じで、まだ何も書かれていないか。 */
+function samePlanStillUntouched(target, current) {
+  if (!current || blank_(target.入荷ID)) return false;
+  return ['入荷ID', '便ID', '明細ID'].every(function (k) { return same_(current[k], target[k]); }) && untouchedReceipt_(current);
+}
+
 function dt_(v) { if (!v) return null; var d = v instanceof Date ? v : new Date(v); return isNaN(d.getTime()) ? null : d; }
 
 function shipmentStage(ship, shipLines, receipts, today) {
@@ -188,4 +212,4 @@ function shipmentStage(ship, shipLines, receipts, today) {
   return '出航前';
 }
 
-if (typeof module !== 'undefined') module.exports = { resolveDest: resolveDest, receiptPlanUpdates: receiptPlanUpdates, buildReceiptPlans: buildReceiptPlans, shipmentStage: shipmentStage, matchCandidates: matchCandidates, upsertShipments: upsertShipments, upsertShipLines: upsertShipLines, assignShipmentIds: assignShipmentIds, shipmentFolderName: shipmentFolderName };
+if (typeof module !== 'undefined') module.exports = { resolveDest: resolveDest, receiptPlanUpdates: receiptPlanUpdates, buildReceiptPlans: buildReceiptPlans, unlinkedReceipts: unlinkedReceipts, orphanReceiptPlans: orphanReceiptPlans, samePlanStillUntouched: samePlanStillUntouched, shipmentStage: shipmentStage, matchCandidates: matchCandidates, upsertShipments: upsertShipments, upsertShipLines: upsertShipLines, assignShipmentIds: assignShipmentIds, shipmentFolderName: shipmentFolderName };
