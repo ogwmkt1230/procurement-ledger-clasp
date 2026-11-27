@@ -11,7 +11,9 @@ function setupLedger() {
       sh.setFrozenRows(1);
     } else {
       var cur = sh.getRange(1, 1, 1, def.headers.length).getValues()[0];
-      if (cur.join('\t') !== def.headers.join('\t')) throw new Error(def.name + ' の見出しが定義と違います');
+      var add = headersToAppend(cur, def.headers);
+      if (!add) throw new Error(def.name + ' の見出しが定義と違います（定義：' + def.headers.join('｜') + '）');
+      if (add.length) sh.getRange(1, def.headers.length - add.length + 1, 1, add.length).setValues([add]).setFontWeight('bold');
     }
     ensureRows_(sh, LEDGER_ROWS_);
     setTextFormat_(sh, k, 2, sh.getMaxRows() - 1);

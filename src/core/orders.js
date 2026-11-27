@@ -63,9 +63,17 @@ function lineAmountJpy(row) {
   return Math.round(unit * qty * rate);
 }
 
-function accountingClass(kind, kindMaster) {
-  for (var i = 0; i < (kindMaster || []).length; i++) if (kindMaster[i].種別 === kind) return kindMaster[i].会計区分;
-  return '要確認';
+/** 会計区分。種別マスタで、種別が同じで仕入先コードが一致する行 → 仕入先コードが空の行（全仕入先の既定）→ 要確認 の順に引く。会計区分が空の行は飛ばす。 */
+function accountingClass(kind, kindMaster, supplierCode) {
+  var s = function (v) { return String(v === null || v === undefined ? '' : v).trim(); };
+  var k = s(kind), sup = s(supplierCode), dflt = '';
+  for (var i = 0; i < (kindMaster || []).length; i++) {
+    var m = kindMaster[i], cls = s(m.会計区分), ms = s(m.仕入先コード);
+    if (s(m.種別) !== k || !cls) continue;
+    if (ms && ms === sup) return cls;
+    if (!ms && !dflt) dflt = cls;
+  }
+  return dflt || '要確認';
 }
 
 function validateInputRow(row) {
