@@ -24,7 +24,7 @@ function importNxFromInboxLocked_() {
 /** xlsx 1ファイルを変換して取り込む。 */
 function importNxFile(fileId) {
   var src = DriveApp.getFileById(fileId);
-  var copy = Drive.Files.copy({ title: '[tmp] ' + src.getName(), mimeType: MimeType.GOOGLE_SHEETS }, fileId);
+  var copy = Drive.Files.copy({ title: '[tmp] ' + src.getName(), mimeType: MimeType.GOOGLE_SHEETS }, fileId, { convert: true });
   var now = new Date();
   var log = { file: src.getName(), shipIns: 0, shipUpd: 0, lineIns: 0, lineUpd: 0, flags: 0, warnings: [] };
   try {
