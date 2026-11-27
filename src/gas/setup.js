@@ -14,6 +14,7 @@ function setupLedger() {
       if (cur.join('\t') !== def.headers.join('\t')) throw new Error(def.name + ' の見出しが定義と違います');
     }
     ensureRows_(sh, LEDGER_ROWS_);
+    setTextFormat_(sh, k, 2, sh.getMaxRows() - 1);
     applyValidation_(sh, k);
     protectColumns_(sh, k);
   });

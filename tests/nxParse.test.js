@@ -120,3 +120,18 @@ test('nx: 蛇口発|5 の輸入許可日（打ち間違い）を拾う', () => {
   const s = parseNxSheet(fx['蛇口発'], '蛇口発').shipments.find(x => x.key === '蛇口発|5');
   assert.strictEqual(ymd(s.輸入許可日), '2026-06-10');
 });
+test('nx: No.が空の便は取り込まず警告し、その続きの行も前の便に付けない（行の位置でキーを作らない）', () => {
+  const head = ['', 'shipper', 'H B/L NO', 'コンテナNO', 'コンテナタイプ', 'ETD', '配達予定日', '対象商品'];
+  const rows = [head,
+    [1, 'MITMES', 'HB1', 'AAAU1111111', '40F DRY', 46339, 46351, '白ドライヤー：100'],
+    ['', 'MITMES', 'HB2', 'BBBU2222222', '40F DRY', 46339, 46351, '青ドライヤー：200'],
+    ['', '', '', 'CCCU3333333', '40F DRY', '', 46351, '黒ドライヤー：300'],
+    [3, 'MITMES', 'HB3', 'DDDU4444444', '40F DRY', 46339, 46351, 'モカドライヤー：400']];
+  const r = parseNxSheet(rows, '蛇口発');
+  assert.deepStrictEqual(r.shipments.map(s => s.key), ['蛇口発|1', '蛇口発|3']);
+  assert.deepStrictEqual(r.shipLines.map(l => [l.key, l.コンテナNO]), [['蛇口発|1', 'AAAU1111111'], ['蛇口発|3', 'DDDU4444444']]);
+  assert.strictEqual(r.warnings.length, 1);
+  assert.match(r.warnings[0], /^蛇口発 3行目: No\.が空.*MITMES/);
+  const inserted = [head, head.map(() => '')].concat(rows.slice(1));
+  assert.deepStrictEqual(parseNxSheet(inserted, '蛇口発').shipments.map(s => s.key), ['蛇口発|1', '蛇口発|3']);
+});
