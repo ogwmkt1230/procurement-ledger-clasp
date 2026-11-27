@@ -31,7 +31,7 @@
 - Final: minor (deferred): blank No. falls back to shipper+row index key (row insert → duplicate)
 - Final: minor (deferred): 配達先コード stores NX free-text name, not 配達先マスタ code — resolved 2026-11-27 in #5 (別名 lookup, '配達先不明' flag)
 - Final: minor (deferred): 会計区分 from 種別 only, not 仕入先×種別
-- Final: minor (deferred): edits starting at row 1 skipped; failed tryLock drops edit silently
+- Final: minor (deferred): edits starting at row 1 skipped; failed tryLock drops edit silently — resolved 2026-11-27: the edited range is clipped to its data rows (dataRowSpan) instead of skipped; when the document lock isn't free within 20s the range is saved as Script Property `DEFERRED_EDIT_<uuid>` (one key per edit, so lock-free saves never race) with a toast, and applied by the next locked onEdit or by renderViews (hourly; only when running as OWNER_EMAIL, since the handlers write protected columns); handlers re-read the sheet, so re-running a range is harmless; a range whose handler throws is dropped and the run fails (owner notified), as for a normal edit — cost if wrong: rows inserted/deleted above a deferred range before it is applied shift it (the edited row then waits for its next edit)
 - Final: minor (deferred): changing 明細ID on an already 確定 line leaves old receipt plan
 - Final: minor (deferred): leading-zero text (INV/NX番号) coerced by Sheets → needless updates
 - Final: minor (deferred): 候補あり lines not covered by 14-day rule

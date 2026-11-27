@@ -11,20 +11,75 @@ function onOpen() {
 /** インストール型の編集トリガー。対象シートの編集だけを各処理に振り分ける。 */
 function onEditInstalled(e) {
   if (!e || !e.range) return;
-  var name = e.range.getSheet().getName();
+  var sheet = e.range.getSheet();
+  var fn = editHandlerFor_(sheet.getName());
+  if (!fn) return;
+  // 見出し行から始まる範囲（列ごとの削除・貼り付けなど）も、データ行の部分は処理する
+  var span = dataRowSpan(e.range.getRow(), e.range.getNumRows());
+  if (!span) return;
+  var lock = LockService.getDocumentLock();
+  if (!lock.tryLock(20000)) {
+    deferEdit_(sheet.getName(), span);
+    return;
+  }
+  try {
+    fn(sheet, span.startRow, span.numRows);
+    applyDeferredEdits_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 編集を処理する関数をシート名から引く。対象外のシートは null。 */
+function editHandlerFor_(sheetName) {
   var handlers = {};
   handlers[SHEETS.input.name] = handleInputEdit_;
   handlers[SHEETS.shipments.name] = handleShipmentEdit_;
   handlers[SHEETS.shipLines.name] = handleShipLineEdit_;
-  var fn = handlers[name];
-  if (!fn || e.range.getRow() < 2) return;
-  var lock = LockService.getDocumentLock();
-  if (!lock.tryLock(20000)) return;
-  try {
-    fn(e.range.getSheet(), e.range.getRow(), e.range.getNumRows());
-  } finally {
-    lock.releaseLock();
-  }
+  return handlers[sheetName] || null;
+}
+
+/** ロックが取れずに後回しにした編集は、スクリプトプロパティにこの接頭辞＋uuid のキーで1件ずつ置く。 */
+var DEFERRED_EDIT_PREFIX_ = 'DEFERRED_EDIT_';
+
+/** ロックが取れなかった編集の範囲を覚えておき、編集した人に知らせる。1件1キーなので、ロックなしで同時に書いても取り合わない。 */
+function deferEdit_(sheetName, span) {
+  PropertiesService.getScriptProperties().setProperty(DEFERRED_EDIT_PREFIX_ + Utilities.getUuid(),
+    JSON.stringify({ sheet: sheetName, startRow: span.startRow, numRows: span.numRows, at: new Date().toISOString() }));
+  console.warn('ロックが取れず、編集の反映を後回しにした: ' + sheetName + ' ' + span.startRow + '行目から' + span.numRows + '行');
+  SpreadsheetApp.getActive().toast('ほかの処理が実行中のため、この編集の自動処理（ID・金額・入荷予定など）をあとに回しました。次の編集か1時間ごとの更新のときに自動で反映します。', '統合台帳', 15);
+}
+
+/**
+ * 後回しにした編集を反映する。ドキュメントロックを持っている間だけ呼ぶ。
+ * キーは先に消す（反映中に新しく後回しになった分は別のキーなので残る）。失敗した範囲は残さず、全部試してから例外にする
+ * （ふだんの編集でハンドラーが例外を出したときと同じく、実行の失敗として所有者に通知される）。
+ */
+function applyDeferredEdits_() {
+  var props = PropertiesService.getScriptProperties();
+  var all = props.getProperties();
+  var keys = Object.keys(all).filter(function (k) { return k.indexOf(DEFERRED_EDIT_PREFIX_) === 0; });
+  if (!keys.length) return;
+  var spans = keys.map(function (k) { try { return JSON.parse(all[k]); } catch (err) { return null; } });
+  keys.forEach(function (k) { props.deleteProperty(k); });
+  var ss = SpreadsheetApp.getActive(), errors = [];
+  mergeEditSpans(spans).forEach(function (s) {
+    var fn = editHandlerFor_(s.sheet), sh = ss.getSheetByName(s.sheet);
+    if (!fn || !sh) return;
+    try {
+      fn(sh, s.startRow, s.numRows);
+    } catch (err) {
+      console.error(err);
+      errors.push(s.sheet + ' ' + s.startRow + '行目から' + s.numRows + '行: ' + err.message);
+    }
+  });
+  if (errors.length) throw new Error('後回しにした編集を反映できませんでした\n' + errors.join('\n'));
+}
+
+/** 台帳の所有者（OWNER_EMAIL）として動いているか。保護列に書けるのは所有者だけ。 */
+function runningAsOwner_() {
+  var owner = PropertiesService.getScriptProperties().getProperty('OWNER_EMAIL');
+  return !owner || Session.getEffectiveUser().getEmail() === owner;
 }
 
 /** シートの全データ行を見出しキーのオブジェクトで読む。 */
