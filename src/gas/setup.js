@@ -1,6 +1,7 @@
 /** 統合台帳のシートを作る。何度実行しても壊れない。 */
 function setupLedger() {
   var ss = SpreadsheetApp.getActive();
+  ss.setSpreadsheetTimeZone('Asia/Tokyo');
   Object.keys(SHEETS).forEach(function (k) {
     var def = SHEETS[k];
     var sh = ss.getSheetByName(def.name);

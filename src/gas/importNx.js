@@ -29,6 +29,8 @@ function importNxFile(fileId) {
   var log = { file: src.getName(), shipIns: 0, shipUpd: 0, lineIns: 0, lineUpd: 0, flags: 0, warnings: [] };
   try {
     var tmp = SpreadsheetApp.openById(copy.id);
+    // 変換でできる一時スプシはアカウント既定のタイムゾーンになる。台帳と違うと日付が時刻つきで読まれ、再取り込みで全便が「更新」になる
+    tmp.setSpreadsheetTimeZone(SpreadsheetApp.getActive().getSpreadsheetTimeZone());
     tmp.getSheets().forEach(function (sh) {
       if (sh.getName().indexOf('発') < 0) return;
       var parsed = parseNxSheet(sh.getDataRange().getValues(), sh.getName());

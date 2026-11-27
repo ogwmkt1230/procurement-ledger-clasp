@@ -35,3 +35,4 @@
 - Final: minor (deferred): changing 明細ID on an already 確定 line leaves old receipt plan
 - Final: minor (deferred): leading-zero text (INV/NX番号) coerced by Sheets → needless updates
 - Final: minor (deferred): 候補あり lines not covered by 14-day rule
+- Gate 1: Ruling: importNxFile sets the converted temp sheet's time zone to the ledger's before reading, and setupLedger pins the ledger to Asia/Tokyo — the first run (2026-11-27 16:25 JST) was written as 11/26 23:25 because the ledger was in Pacific time then; Drive-converted sheets take the account default zone, so dates would read as 17:00 and same_ (exact getTime) would count every 便 as updated on re-import — cost if wrong: none (setting the zone does not shift stored serials)
