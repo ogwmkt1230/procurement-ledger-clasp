@@ -30,7 +30,7 @@
 - Final: minor (deferred): 品目なし flagged even when another row lists that container's items (noisy 要確認) — resolved 2026-11-27: 品目なし only when the whole 便 has no items (Makoto's choice; NX lists a 便's items on its first row, so blank container rows are normal)
 - Final: minor (deferred): blank No. falls back to shipper+row index key (row insert → duplicate)
 - Final: minor (deferred): 配達先コード stores NX free-text name, not 配達先マスタ code — resolved 2026-11-27 in #5 (別名 lookup, '配達先不明' flag)
-- Final: minor (deferred): 会計区分 from 種別 only, not 仕入先×種別
+- Final: minor (deferred): 会計区分 from 種別 only, not 仕入先×種別 — resolved 2026-11-27: 種別マスタ gets a 仕入先コード column at the right; accountingClass takes the row whose 仕入先コード matches the line, else the row with a blank 仕入先コード (default for all suppliers), else 要確認; rows with a blank 会計区分 are skipped (Makoto's choice; 開発費 stays 要確認（経理と確認） until 経理 answers)
 - Final: minor (deferred): edits starting at row 1 skipped; failed tryLock drops edit silently
 - Final: minor (deferred): changing 明細ID on an already 確定 line leaves old receipt plan
 - Final: minor (deferred): leading-zero text (INV/NX番号) coerced by Sheets → needless updates
