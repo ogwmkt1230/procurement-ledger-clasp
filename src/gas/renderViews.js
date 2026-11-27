@@ -26,7 +26,7 @@ function renderViewsLocked_() {
   writeView_(VIEW_SHEETS_.backlog, viewBacklogByMonth(lines, backlog));
   writeView_(VIEW_SHEETS_.transit, viewInTransit(ships, shipLines, receipts, today));
   writeView_(VIEW_SHEETS_.plan, viewReceiptPlan(receipts, lines, items));
-  writeView_(VIEW_SHEETS_.mismatch, viewMismatch(lines, receipts, shipLines, backlog, today));
+  writeView_(VIEW_SHEETS_.mismatch, viewMismatch(lines, receipts, shipLines, backlog, today, getConfig_('CUTOVER_DATE')));
 }
 
 function writeView_(name, view) {
