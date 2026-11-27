@@ -4,12 +4,11 @@ function handleInputEdit_(sheet, startRow, numRows) {
   var orders = readObjects_('orders');
   var kinds = readObjects_('mKinds');
   var first = startRow - 2, last = first + numRows;
-  var targets = all.slice(first, last).filter(function (r) { return r.ブランド || r.仕入先コード || r.品名; });
-  if (!targets.length) return;
-  var context = all.filter(function (r, i) { return i < first || i >= last; });
-  var assigned = assignOrderIds(context.concat(all.slice(first, last)), orders.map(function (o) { return o.発注ID; })).slice(context.length);
-  assigned = assigned.map(function (r) {
-    if (!(r.ブランド || r.仕入先コード || r.品名)) return r;
+  if (!all.slice(first, last).some(hasInputContent)) return;
+  // IDは中身のある行にだけ振る（列ごとの編集で、空行や中身を消した行に振らない）
+  var ids = assignInputRangeIds(all, first, last, orders.map(function (o) { return o.発注ID; }));
+  var assigned = ids.rows.map(function (r) {
+    if (!hasInputContent(r)) return r;
     var amt = lineAmountJpy(r);
     r['金額(円)'] = amt === null ? '' : amt;
     r.会計区分 = accountingClass(r.種別, kinds, r.仕入先コード);
@@ -18,7 +17,7 @@ function handleInputEdit_(sheet, startRow, numRows) {
     return r;
   });
   writeRowObjects_('input', startRow, assigned);
-  upsertOrders_(toOrderRecords(assigned), orders);
+  upsertOrders_(ids.orders, orders);
 }
 
 function upsertOrders_(records, existing) {

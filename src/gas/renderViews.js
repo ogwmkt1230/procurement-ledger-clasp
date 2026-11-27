@@ -4,7 +4,17 @@ var VIEW_SHEETS_ = { yomi: 'V_ヨミ表', backlog: 'V_発注残', transit: 'V_�
 function renderViews() {
   var lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) return;
-  try { renderViewsLocked_(); } finally { lock.releaseLock(); }
+  try {
+    // 後回しにした編集を先に反映してからビューを作る（所有者として動くとき＝1時間ごとの更新・所有者のメニュー操作だけ。判定は applyEdits_ の中）。
+    // 反映が失敗してもビューは作り、そのあと例外を上げる
+    try {
+      applyEdits_([]);
+    } finally {
+      renderViewsLocked_();
+    }
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function renderViewsLocked_() {
