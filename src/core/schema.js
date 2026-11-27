@@ -41,6 +41,17 @@ function colIndex(sheetKey, header) {
   return i;
 }
 
+/** 既存シートの1行目と定義の見出しを比べ、右端に書き足す見出しを返す。足すものが無ければ []、1列目から違う・途中が違う・書き足す場所に文字があれば null。 */
+function headersToAppend(current, defined) {
+  var cur = (current || []).map(function (v) { return v === null || v === undefined ? '' : String(v); });
+  var n = 0;
+  while (n < defined.length && cur[n] === defined[n]) n++;
+  if (n === defined.length) return [];
+  if (n === 0) return null;
+  for (var i = n; i < cur.length && i < defined.length; i++) if (cur[i] !== '') return null;
+  return defined.slice(n);
+}
+
 /** 二次元配列（見出し行なし）を見出し名キーのオブジェクト配列に。 */
 function rowsToObjects(sheetKey, values) {
   var h = SHEETS[sheetKey].headers;
@@ -50,4 +61,4 @@ function objectToRow(sheetKey, obj) {
   return SHEETS[sheetKey].headers.map(function (k) { return obj[k] === undefined || obj[k] === null ? '' : obj[k]; });
 }
 
-if (typeof module !== 'undefined') module.exports = { SHEETS: SHEETS, ENUMS: ENUMS, colIndex: colIndex, rowsToObjects: rowsToObjects, objectToRow: objectToRow };
+if (typeof module !== 'undefined') module.exports = { SHEETS: SHEETS, ENUMS: ENUMS, colIndex: colIndex, headersToAppend: headersToAppend, rowsToObjects: rowsToObjects, objectToRow: objectToRow };
