@@ -84,10 +84,20 @@ test('nx: 釜山 SELDWB17811 の配達予定日', () => {
   assert.strictEqual(cont.配達予定日, null);
   assert.ok(cont.要確認.includes('配達予定日なし'));
 });
-test('nx: 品目なしの続き行は要確認', () => {
+test('nx: 便のどこかに品目があれば、品目の無いコンテナ行は要確認にしない', () => {
   const r = parseNxSheet(fx['蛇口発'], '蛇口発');
   const l = r.shipLines.find(x => x.コンテナNO === 'OOLU6324848');
-  assert.ok(l.要確認.includes('品目なし'));
+  assert.deepStrictEqual(l.要確認, []);
+  const all = r.shipLines.concat(parseNxSheet(fx['釜山発'], '釜山発').shipLines);
+  assert.strictEqual(all.filter(x => x.要確認.includes('品目なし')).length, 0);
+});
+test('nx: 便に品目が1つも無ければ品目なし', () => {
+  const head = ['', 'shipper', 'H B/L NO', 'コンテナNO', 'コンテナタイプ', 'ETD', '配達予定日', '対象商品'];
+  const rows = [head,
+    [1, 'MITMES', 'HB1', 'AAAU1111111', '40F DRY x 2', 46339, 46351, ''],
+    ['', '', '', 'BBBU2222222', '', '', 46351, '']];
+  const ls = parseNxSheet(rows, '蛇口発').shipLines;
+  assert.deepStrictEqual(ls.map(l => l.要確認), [['品目なし'], ['品目なし']]);
 });
 test('nx: H B/L未定の便も取り込む', () => {
   const r = parseNxSheet(fx['蛇口発'], '蛇口発');
