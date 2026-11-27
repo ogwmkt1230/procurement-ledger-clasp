@@ -12,7 +12,7 @@ function handleInputEdit_(sheet, startRow, numRows) {
     if (!(r.ブランド || r.仕入先コード || r.品名)) return r;
     var amt = lineAmountJpy(r);
     r['金額(円)'] = amt === null ? '' : amt;
-    r.会計区分 = accountingClass(r.種別, kinds);
+    r.会計区分 = accountingClass(r.種別, kinds, r.仕入先コード);
     if (!r.状態) r.状態 = '発注中';
     r.要確認 = validateInputRow(r).join(' / ');
     return r;
