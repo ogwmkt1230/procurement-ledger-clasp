@@ -55,7 +55,13 @@ function deferEdit_(sheetName, span) {
  * 1つの範囲が失敗しても残りは処理し、最後に例外にする（実行の失敗として所有者に通知される。失敗した範囲は残さない）。
  */
 function applyEdits_(spans) {
-  var deferred = runningAsOwner_() ? takeDeferredEdits_() : [];
+  var deferred = [];
+  try {
+    if (runningAsOwner_()) deferred = takeDeferredEdits_();
+  } catch (err) {
+    // 後回し分を取り出せなくても、今回の編集は処理する（キーは残っているので次の機会に回る）
+    console.error(err);
+  }
   var ss = SpreadsheetApp.getActive(), errors = [];
   mergeEditSpans(deferred.concat(spans)).forEach(function (s) {
     var fn = editHandlerFor_(s.sheet), sh = ss.getSheetByName(s.sheet);
@@ -72,7 +78,8 @@ function applyEdits_(spans) {
 
 /**
  * 後回しにした編集をプロパティから取り出して消す（反映中に新しく後回しになった分は別のキーなので残る）。
- * 消す前に範囲を console.warn に残す（実行時間の上限で打ち切られたときの手がかり）。壊れた値は null。
+ * 消す前に範囲を console.warn に残す（実行時間の上限で打ち切られたときの手がかり）。
+ * 返すのは消せたキーの範囲だけ。消すのに失敗したらそこで止め、残りは次の機会に回す（消したのに処理しない範囲も、二重に処理する範囲も作らない）。
  */
 function takeDeferredEdits_() {
   var props = PropertiesService.getScriptProperties();
@@ -80,8 +87,17 @@ function takeDeferredEdits_() {
   var keys = Object.keys(all).filter(function (k) { return k.indexOf(DEFERRED_EDIT_PREFIX_) === 0; });
   if (!keys.length) return [];
   console.warn('後回しにした編集を反映する: ' + keys.map(function (k) { return all[k]; }).join(' '));
-  keys.forEach(function (k) { props.deleteProperty(k); });
-  return keys.map(function (k) { try { return JSON.parse(all[k]); } catch (err) { return null; } });
+  var taken = [];
+  for (var i = 0; i < keys.length; i++) {
+    try {
+      props.deleteProperty(keys[i]);
+    } catch (err) {
+      console.error(err);
+      break;
+    }
+    try { taken.push(JSON.parse(all[keys[i]])); } catch (err) { /* 壊れた値は捨てる */ }
+  }
+  return taken;
 }
 
 /**
