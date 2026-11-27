@@ -122,12 +122,22 @@ function ensureRows_(sh, lastNeeded) {
   if (lastNeeded > max) sh.insertRowsAfter(max, Math.max(lastNeeded - max, 1000));
 }
 
-/** 変わった列のセルだけ書く（保護列を不用意に書かないため）。 */
+/** 変わった列のセルだけ書く（保護列を不用意に書かないため）。文字として持つ列は先に書式なしテキストにする。 */
 function writeChanges_(key, rowNumber, changes) {
   var sh = SpreadsheetApp.getActive().getSheetByName(SHEETS[key].name);
+  var text = SHEETS[key].text || [];
   Object.keys(changes).forEach(function (h) {
     var v = changes[h];
-    sh.getRange(rowNumber, colIndex(key, h) + 1).setValue(v === null || v === undefined ? '' : v);
+    var cell = sh.getRange(rowNumber, colIndex(key, h) + 1);
+    if (text.indexOf(h) >= 0) cell.setNumberFormat('@');
+    cell.setValue(v === null || v === undefined ? '' : v);
+  });
+}
+
+/** SHEETS の text の列を書式なしテキスト（@）にする。値より先にかけないと '0012345' が数値 12345 になる。 */
+function setTextFormat_(sh, key, startRow, numRows) {
+  (SHEETS[key].text || []).forEach(function (h) {
+    sh.getRange(startRow, colIndex(key, h) + 1, numRows, 1).setNumberFormat('@');
   });
 }
 
@@ -142,6 +152,7 @@ function writeRowObjects_(key, startRow, objs) {
   if (!objs.length) return;
   var sh = SpreadsheetApp.getActive().getSheetByName(SHEETS[key].name);
   ensureRows_(sh, startRow + objs.length - 1);
+  setTextFormat_(sh, key, startRow, objs.length);
   sh.getRange(startRow, 1, objs.length, SHEETS[key].headers.length).setValues(objs.map(function (o) { return objectToRow(key, o); }));
 }
 

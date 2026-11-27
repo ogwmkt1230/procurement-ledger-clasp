@@ -132,9 +132,15 @@ function parseNxSheet(values, origin) {
     var get = function (k) { return c[k] >= 0 ? row[c[k]] : ''; };
     var no = str_(get('no')), shipper = str_(get('shipper'));
     if (no || shipper) {
+      if (!no) {
+        // 便は「発地|No.」で見分ける。No. の無い便を行の位置などで仮に入れると、行が増えたり No. が付いたりした時点で別の便になる
+        warnings.push(origin + ' ' + (r + 1) + '行目: No.が空の便は取り込みません（' + shipper + '）');
+        cur = null;
+        continue;
+      }
       var etd = parseLooseDate(get('etd'));
       var status = parseStatusMemos(memoCols.map(function (i) { return row[i]; }), etd ? etd.getFullYear() : null, etd);
-      cur = { key: origin + '|' + (no || shipper + ':' + r), 発地: origin, shipper: shipper, 'INV NO': str_(get('inv')), 'H B/L': str_(get('hbl')),
+      cur = { key: origin + '|' + no, 発地: origin, shipper: shipper, 'INV NO': str_(get('inv')), 'H B/L': str_(get('hbl')),
         'M B/L': str_(get('mbl')), VESSEL: str_(get('vessel')), ETD: etd, ETA: parseLooseDate(get('eta')), NX管理番号: str_(get('nx')),
         輸入許可日: status.輸入許可日, 倉庫連絡日: status.倉庫連絡日 };
       shipments.push(cur);

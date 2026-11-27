@@ -5,10 +5,10 @@ const { SHEETS, colIndex } = require('../src/core/schema.js');
 test('schema: 全シートでheadersが重複しない', () => {
   for (const k of Object.keys(SHEETS)) assert.strictEqual(new Set(SHEETS[k].headers).size, SHEETS[k].headers.length, k);
 });
-test('schema: key・required・protectedはheadersに含まれる', () => {
+test('schema: key・required・protected・textはheadersに含まれる', () => {
   for (const k of Object.keys(SHEETS)) {
     const s = SHEETS[k];
-    for (const h of [s.key, ...s.required, ...s.protected]) assert.ok(s.headers.includes(h), `${k}:${h}`);
+    for (const h of [s.key, ...s.required, ...s.protected, ...(s.text || [])]) assert.ok(s.headers.includes(h), `${k}:${h}`);
   }
 });
 test('schema: colIndex', () => {

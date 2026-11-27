@@ -35,6 +35,36 @@ test('orders: 会計区分', () => {
   assert.strictEqual(accountingClass('金型', m), '固定資産');
   assert.strictEqual(accountingClass('謎', m), '要確認');
 });
+test('orders: 会計区分 仕入先コードの行が既定より優先（行の順番によらない）', () => {
+  const m = [{ 種別: '開発費', 会計区分: '費用', 仕入先コード: '' }, { 種別: '開発費', 会計区分: '商品原価', 仕入先コード: 'S-IMN' }];
+  for (const master of [m, m.slice().reverse()]) {
+    assert.strictEqual(accountingClass('開発費', master, 'S-IMN'), '商品原価');
+    assert.strictEqual(accountingClass('開発費', master, 'S-MTM'), '費用');
+    assert.strictEqual(accountingClass('開発費', master), '費用');
+  }
+});
+test('orders: 会計区分 既定の行が無く仕入先も違えば要確認', () => {
+  const m = [{ 種別: '開発費', 会計区分: '商品原価', 仕入先コード: 'S-IMN' }];
+  assert.strictEqual(accountingClass('開発費', m, 'S-MTM'), '要確認');
+  assert.strictEqual(accountingClass('開発費', m), '要確認');
+});
+test('orders: 会計区分 会計区分が空の行は飛ばす', () => {
+  const m = [{ 種別: '開発費', 会計区分: '', 仕入先コード: 'S-IMN' }, { 種別: '開発費', 会計区分: '費用', 仕入先コード: '' }];
+  assert.strictEqual(accountingClass('開発費', m, 'S-IMN'), '費用');
+});
+test('orders: 会計区分 前後の空白は無視（マスタ側も明細側も）', () => {
+  const m = [{ 種別: '開発費 ', 会計区分: ' 商品原価', 仕入先コード: ' S-IMN ' }];
+  assert.strictEqual(accountingClass('開発費', m, 'S-IMN'), '商品原価');
+  assert.strictEqual(accountingClass('開発費 ', m, ' S-IMN'), '商品原価');
+});
+test('orders: 会計区分 数値のセルでも止まらない', () => {
+  const m = [{ 種別: '開発費', 会計区分: '費用', 仕入先コード: '' }, { 種別: '開発費', 会計区分: '商品原価', 仕入先コード: 123 }];
+  assert.strictEqual(accountingClass('開発費', m, '123'), '商品原価');
+  assert.strictEqual(accountingClass('開発費', m, 123), '商品原価');
+});
+test('orders: 会計区分 会計区分が空の既定行しか無ければ要確認', () => {
+  assert.strictEqual(accountingClass('開発費', [{ 種別: '開発費', 会計区分: '' }]), '要確認');
+});
 test('orders: toOrderRecords はキーごとに1件', () => {
   const rows = assignOrderIds([{ ...base }, { ...base }, { ...base, 稟議AP: 'AP9' }], []);
   const o = toOrderRecords(rows);
