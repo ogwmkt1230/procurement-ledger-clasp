@@ -17,3 +17,10 @@
 - `src/appsscript.json` は Asia/Tokyo と Drive v2 を有効にした状態を保つ。`clasp create-script` などで上書きされたら戻す
 - 反映は `clasp push`。テストが通らないコードは push しない
 - フォルダID・ヨミ表IDの既定値は `src/gas/config.js`（スクリプトプロパティがあればそちらが優先）
+
+## 反映の流れ（GitHub）
+
+- 開発はブランチを切ってPRにする。PRでは `test` ワークフロー（`npm test` と GAS ファイルの構文チェック）が走る
+- main にマージすると `deploy` ワークフローが `clasp push --force` で台帳のスクリプトに反映する（`src/**` か `.clasp.json` が変わったときだけ）
+- ローカルで `clasp push` はしない。反映は main へのマージだけで行う
+- clasp の認証情報はリポジトリの Secret `CLASPRC_JSON`（Environment `production`）
