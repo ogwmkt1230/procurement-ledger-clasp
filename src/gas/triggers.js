@@ -12,8 +12,7 @@ function onOpen() {
 function onEditInstalled(e) {
   if (!e || !e.range) return;
   var sheet = e.range.getSheet();
-  var fn = editHandlerFor_(sheet.getName());
-  if (!fn) return;
+  if (!editHandlerFor_(sheet.getName())) return;
   // 見出し行から始まる範囲（列ごとの削除・貼り付けなど）も、データ行の部分は処理する
   var span = dataRowSpan(e.range.getRow(), e.range.getNumRows());
   if (!span) return;
@@ -23,8 +22,7 @@ function onEditInstalled(e) {
     return;
   }
   try {
-    fn(sheet, span.startRow, span.numRows);
-    applyDeferredEdits_();
+    applyEdits_([{ sheet: sheet.getName(), startRow: span.startRow, numRows: span.numRows }]);
   } finally {
     lock.releaseLock();
   }
@@ -47,23 +45,19 @@ function deferEdit_(sheetName, span) {
   PropertiesService.getScriptProperties().setProperty(DEFERRED_EDIT_PREFIX_ + Utilities.getUuid(),
     JSON.stringify({ sheet: sheetName, startRow: span.startRow, numRows: span.numRows, at: new Date().toISOString() }));
   console.warn('ロックが取れず、編集の反映を後回しにした: ' + sheetName + ' ' + span.startRow + '行目から' + span.numRows + '行');
-  SpreadsheetApp.getActive().toast('ほかの処理が実行中のため、この編集の自動処理（ID・金額・入荷予定など）をあとに回しました。次の編集か1時間ごとの更新のときに自動で反映します。', '統合台帳', 15);
+  SpreadsheetApp.getActive().toast('ほかの処理が実行中のため、この編集の自動処理（ID・金額・入荷予定など）をあとに回しました。次に発注明細入力・便・出荷明細のどれかを編集したときか、1時間ごとの更新のときに自動で反映します。', '統合台帳', 15);
 }
 
 /**
- * 後回しにした編集を反映する。ドキュメントロックを持っている間だけ呼ぶ。
- * キーは先に消す（反映中に新しく後回しになった分は別のキーなので残る）。失敗した範囲は残さず、全部試してから例外にする
- * （ふだんの編集でハンドラーが例外を出したときと同じく、実行の失敗として所有者に通知される）。
+ * 編集範囲 {sheet, startRow, numRows} を処理する。ドキュメントロックを持っている間だけ呼ぶ。
+ * 所有者として動いているときは、後回しにした編集を前に足し、重なる・隣り合う範囲をまとめて、シートごとに行の順で処理する
+ * （発注明細入力のIDが入力の順に振られ、同じ行を2回処理しない）。所有者以外なら後回し分のキーには触れない（保護列に書けないため）。
+ * 1つの範囲が失敗しても残りは処理し、最後に例外にする（実行の失敗として所有者に通知される。失敗した範囲は残さない）。
  */
-function applyDeferredEdits_() {
-  var props = PropertiesService.getScriptProperties();
-  var all = props.getProperties();
-  var keys = Object.keys(all).filter(function (k) { return k.indexOf(DEFERRED_EDIT_PREFIX_) === 0; });
-  if (!keys.length) return;
-  var spans = keys.map(function (k) { try { return JSON.parse(all[k]); } catch (err) { return null; } });
-  keys.forEach(function (k) { props.deleteProperty(k); });
+function applyEdits_(spans) {
+  var deferred = runningAsOwner_() ? takeDeferredEdits_() : [];
   var ss = SpreadsheetApp.getActive(), errors = [];
-  mergeEditSpans(spans).forEach(function (s) {
+  mergeEditSpans(deferred.concat(spans)).forEach(function (s) {
     var fn = editHandlerFor_(s.sheet), sh = ss.getSheetByName(s.sheet);
     if (!fn || !sh) return;
     try {
@@ -73,10 +67,27 @@ function applyDeferredEdits_() {
       errors.push(s.sheet + ' ' + s.startRow + '行目から' + s.numRows + '行: ' + err.message);
     }
   });
-  if (errors.length) throw new Error('後回しにした編集を反映できませんでした\n' + errors.join('\n'));
+  if (errors.length) throw new Error('次の範囲の編集を反映できませんでした\n' + errors.join('\n'));
 }
 
-/** 台帳の所有者（OWNER_EMAIL）として動いているか。保護列に書けるのは所有者だけ。 */
+/**
+ * 後回しにした編集をプロパティから取り出して消す（反映中に新しく後回しになった分は別のキーなので残る）。
+ * 消す前に範囲を console.warn に残す（実行時間の上限で打ち切られたときの手がかり）。壊れた値は null。
+ */
+function takeDeferredEdits_() {
+  var props = PropertiesService.getScriptProperties();
+  var all = props.getProperties();
+  var keys = Object.keys(all).filter(function (k) { return k.indexOf(DEFERRED_EDIT_PREFIX_) === 0; });
+  if (!keys.length) return [];
+  console.warn('後回しにした編集を反映する: ' + keys.map(function (k) { return all[k]; }).join(' '));
+  keys.forEach(function (k) { props.deleteProperty(k); });
+  return keys.map(function (k) { try { return JSON.parse(all[k]); } catch (err) { return null; } });
+}
+
+/**
+ * 台帳の所有者（OWNER_EMAIL）として動いているか。保護列に書けるかは、実行している人の権限で決まるので
+ * getEffectiveUser を見る（assertOwner_ はメニューを押した人を見るので getActiveUser）。
+ */
 function runningAsOwner_() {
   var owner = PropertiesService.getScriptProperties().getProperty('OWNER_EMAIL');
   return !owner || Session.getEffectiveUser().getEmail() === owner;
