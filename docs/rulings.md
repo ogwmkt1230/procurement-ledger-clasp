@@ -27,9 +27,9 @@
 - Task 11: Ruling: completed as notes + getInboundRows_ template only; clone/edit/verify of 04 script deferred to Makoto's PC (needs scriptId + clasp auth; edits a live shared tool) — cost if wrong: 04 repointing still open before cutover
 - Task 12: Ruling: checklist written; executing it (cutover date, freezing sheets) is Makoto's decision and a shared-sheet side effect — cost if wrong: none
 - Final: Ruling: #5 row limit / #6 protected cells / #8 locks fixed in GAS-only code (sheets pre-expanded to 20000 rows + ensureRows_; changed-cell writes; views warning-only protection; import/migration owner-only via OWNER_EMAIL; document locks on import/migration/views) — no unit test possible outside Apps Script; verified by node --check and gas-scope test — cost if wrong: surfaces on first PC run
-- Final: minor (deferred): 品目なし flagged even when another row lists that container's items (noisy 要確認)
+- Final: minor (deferred): 品目なし flagged even when another row lists that container's items (noisy 要確認) — resolved 2026-11-27: 品目なし only when the whole 便 has no items (Makoto's choice; NX lists a 便's items on its first row, so blank container rows are normal)
 - Final: minor (deferred): blank No. falls back to shipper+row index key (row insert → duplicate)
-- Final: minor (deferred): 配達先コード stores NX free-text name, not 配達先マスタ code
+- Final: minor (deferred): 配達先コード stores NX free-text name, not 配達先マスタ code — resolved 2026-11-27 in #5 (別名 lookup, '配達先不明' flag)
 - Final: minor (deferred): 会計区分 from 種別 only, not 仕入先×種別
 - Final: minor (deferred): edits starting at row 1 skipped; failed tryLock drops edit silently
 - Final: minor (deferred): changing 明細ID on an already 確定 line leaves old receipt plan

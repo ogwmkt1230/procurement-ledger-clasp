@@ -101,6 +101,12 @@ function applyBreakdowns_(shipLines, contsByKey) {
   });
   shipLines.forEach(function (l) { if (!l.items.length && !unreadable_(l) && l.要確認.indexOf('品目なし') < 0) l.要確認.push('品目なし'); });
 }
+/** 品目なしは便に品目が1つも無いときだけ。NXは便の品目を最初の行にまとめて書くので、残りのコンテナ行が空なのは普通。 */
+function dropNoItemFlags_(shipLines) {
+  var hasItems = {};
+  shipLines.forEach(function (l) { if (l.items.length) hasItems[l.key] = true; });
+  shipLines.forEach(function (l) { if (hasItems[l.key]) l.要確認 = l.要確認.filter(function (f) { return f !== '品目なし'; }); });
+}
 function unreadable_(line) { return line.要確認.some(function (f) { return f.indexOf('読めない品目') === 0; }); }
 
 function str_(v) { return v === null || v === undefined ? '' : String(v).trim(); }
@@ -158,6 +164,7 @@ function parseNxSheet(values, origin) {
     }
   }
   applyBreakdowns_(shipLines, contsByKey);
+  dropNoItemFlags_(shipLines);
   return { shipments: shipments, shipLines: shipLines, warnings: warnings };
 }
 
